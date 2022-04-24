@@ -134,6 +134,7 @@ impl Images<'_>
     pub async fn get_image(&self, image_name: &str) -> Result<ImageDetails, Box<dyn Error>>
     {
         let endpoint = format!("/images/{}/json", image_name);
+
         let response = self
             .docker
             .borrow()
@@ -144,5 +145,15 @@ impl Images<'_>
         Ok(image)
     }
 
-    //pub async fn delete_image(&self, image_name: &str)
+    //TODO: add return method, which returns about deleted image
+    pub async fn delete_image(&self, image_name: &str, forced: bool, no_prune: bool)
+        -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}?force={}&noprune={}", image_name, forced, no_prune);
+
+        self.docker.borrow()
+            .request(Method::DELETE, endpoint.as_str()).await?;
+
+        Ok(())
+    }
 }
