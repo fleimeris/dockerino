@@ -56,16 +56,21 @@ impl Docker
 
         let response = self.borrow().client.request(request).await?;
 
-        if response.status() != StatusCode::OK
+        match response.status()
         {
-            let status_code = response.status();
-            let body = self.parse_response_body(response).await?;
+            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT | StatusCode::INTERNAL_SERVER_ERROR
+                =>
+            {
+                let status_code = response.status();
+                let body = self.parse_response_body(response).await?;
 
-            let dockerError: DockerError = serde_json::from_str(body.as_str())?;
+                let dockerError: DockerError = serde_json::from_str(body.as_str())?;
 
-            //TODO: custom error with response code
+                //TODO: custom error with response code
 
-            return Err(format!("Response was {:?}. Message:\n{:?}", status_code, dockerError.message))?
+                return Err(format!("Response was {:?}. Message:\n{:?}", status_code, dockerError.message))?
+            },
+            _ => ()
         }
 
         let json_body = self.parse_response_body(response).await?;

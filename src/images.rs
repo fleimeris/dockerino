@@ -171,4 +171,27 @@ impl Images<'_>
 
         Ok(result)
     }
+
+    pub async fn tag_image(&self, image_name: &str, repo_name: Option<&str>, tag: Option<&str>)
+        -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/tag?repo=!repo_name!&tag=!tag_name!", image_name);
+
+        let mut endpoint = match repo_name
+        {
+            Some(repo_name) => endpoint.replace("!repo_name!", repo_name),
+            None => endpoint.replace("!repo_name!", "")
+        };
+
+        let mut endpoint = match tag
+        {
+            Some(tag) => endpoint.replace("!tag_name!", tag),
+            None => endpoint.replace("!tag_name!", "")
+        };
+
+        self.docker.borrow()
+            .request(Method::POST, endpoint.as_str()).await?;
+
+        Ok(())
+    }
 }

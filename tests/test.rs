@@ -55,4 +55,22 @@ mod tests {
             Err(ref error) => panic!("{:?}", error)
         }
     }
+
+    #[tokio::test]
+    async fn tag_image()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let result = images
+            .tag_image("35c73078fa43", Option::Some("someuser/someimage"),
+            Option::Some("test")).await;
+
+        match result
+        {
+            Ok(()) => println!("Image was renamed successfully "),
+            Err(ref error) => panic!("{:?}", error)
+        };
+    }
 }
