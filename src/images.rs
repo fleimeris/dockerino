@@ -104,6 +104,19 @@ pub struct HealthCheck
     start_period: i32
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ImageDeletionInfo
+{
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    untagged: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    deleted: Option<String>
+}
+
 pub struct Images<'a>
 {
     docker: &'a Docker
@@ -147,13 +160,15 @@ impl Images<'_>
 
     //TODO: add return method, which returns about deleted image
     pub async fn delete_image(&self, image_name: &str, forced: bool, no_prune: bool)
-        -> Result<(), Box<dyn Error>>
+        -> Result<Vec<ImageDeletionInfo>, Box<dyn Error>>
     {
         let endpoint = format!("/images/{}?force={}&noprune={}", image_name, forced, no_prune);
 
-        self.docker.borrow()
+        let response = self.docker.borrow()
             .request(Method::DELETE, endpoint.as_str()).await?;
 
-        Ok(())
+        let result: Vec<ImageDeletionInfo> = serde_json::from_str(response.as_str())?;
+
+        Ok(result)
     }
 }

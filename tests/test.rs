@@ -47,11 +47,11 @@ mod tests {
         let images = docker.images();
 
         let image = images
-            .delete_image("09935071653a", true, false).await;
+            .delete_image("c859aafa677c", true, false).await;
 
         match image
         {
-            Ok(()) => println!("Image was deleted"),
+            Ok(response) => println!("{:?}", response),
             Err(ref error) => panic!("{:?}", error)
         }
     }
