@@ -117,6 +117,21 @@ pub struct ImageDeletionInfo
     deleted: Option<String>
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ImageHistory
+{
+    id: String,
+    created: i128,
+    created_by: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    tags: Option<Vec<String>>,
+    size: i128,
+    comment: String
+}
+
 pub struct Images<'a>
 {
     docker: &'a Docker
@@ -156,6 +171,20 @@ impl Images<'_>
         let image: ImageDetails = serde_json::from_str(response.as_str())?;
 
         Ok(image)
+    }
+
+    pub async fn get_image_history(&self, image_name: &str) -> Result<Vec<ImageHistory>, Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/history", image_name);
+
+        let response = self
+            .docker
+            .borrow()
+            .request(Method::GET, endpoint.as_str()).await?;
+
+        let result: Vec<ImageHistory> = serde_json::from_str(response.as_str())?;
+
+        Ok(result)
     }
 
     //TODO: add return method, which returns about deleted image

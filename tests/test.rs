@@ -73,4 +73,21 @@ mod tests {
             Err(ref error) => panic!("{:?}", error)
         };
     }
+
+    #[tokio::test]
+    async fn get_image_history()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let result = images
+            .get_image_history("35c73078fa43").await;
+
+        match result
+        {
+            Ok(result) => println!("{:?}", result),
+            Err(error) => panic!("{:?}", error)
+        }
+    }
 }
