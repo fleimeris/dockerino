@@ -3,6 +3,9 @@ use std::error::Error;
 use hyper::Method;
 use serde::{Serialize, Deserialize};
 use serde_derive::{Serialize, Deserialize};
+use std::io::Write;
+use std::fs;
+use std::fs::OpenOptions;
 
 use crate::docker::Docker;
 
@@ -220,6 +223,27 @@ impl Images<'_>
 
         self.docker.borrow()
             .request(Method::POST, endpoint.as_str()).await?;
+
+        Ok(())
+    }
+
+    pub async fn export_image(&self, image_name: &str, file_path: &str) -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/get", image_name);
+
+        let response = self.docker.borrow()
+            .request_get_response(Method::GET, endpoint.as_str()).await?;
+
+        let bytes = hyper::body::to_bytes(response).await?;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(file_path)?;
+
+        file.write_all(bytes.borrow());
+
+        drop(file);
 
         Ok(())
     }

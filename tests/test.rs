@@ -90,4 +90,21 @@ mod tests {
             Err(error) => panic!("{:?}", error)
         }
     }
+
+    #[tokio::test]
+    async fn export_image()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let result = images
+            .export_image("35c73078fa43", "/home/benas/testas123.tar").await;
+
+        match result
+        {
+            Ok(()) => println!("Image exported"),
+            Err(error) => panic!("{:?}", error)
+        }
+    }
 }
