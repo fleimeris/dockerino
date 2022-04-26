@@ -62,13 +62,12 @@ impl Docker
                 =>
             {
                 let status_code = response.status();
-                let body = self.parse_response_body(response).await?;
 
-                let dockerError: DockerError = serde_json::from_str(body.as_str())?;
+                let docker_error = self.parse_error(response).await?;
 
                 //TODO: custom error with response code
 
-                return Err(format!("Response was {:?}. Message:\n{:?}", status_code, dockerError.message))?
+                return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
             },
             _ => ()
         }
@@ -76,6 +75,40 @@ impl Docker
         let json_body = self.parse_response_body(response).await?;
 
         Ok(json_body.parse()?)
+    }
+
+    pub async fn request_get_response(&self, method : Method, endpoint: &str) -> Result<Response<Body>, Box<dyn Error>>
+    {
+        let request = self.build_request(method, endpoint)?;
+
+        let response= self.borrow().client.request(request).await?;
+
+        match response.status()
+        {
+            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT | StatusCode::INTERNAL_SERVER_ERROR
+            =>
+                {
+                    let status_code = response.status();
+
+                    let docker_error = self.parse_error(response).await?;
+
+                    //TODO: custom error with response code
+
+                    return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
+                },
+            _ => ()
+        }
+
+        Ok(response)
+    }
+
+    pub async fn parse_error(&self, response: Response<Body>) -> Result<DockerError, Box<dyn Error>>
+    {
+        let body = self.parse_response_body(response).await?;
+
+        let dockerError: DockerError = serde_json::from_str(body.as_str())?;
+
+        Ok(dockerError)
     }
 
     pub fn images(&self) -> Images
