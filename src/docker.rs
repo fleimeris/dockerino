@@ -28,7 +28,8 @@ impl Docker
         }
     }
 
-    pub fn build_request(&self, method : Method, endpoint: &str) -> Result<Request<Body>, Box<dyn std::error::Error>>
+    pub fn build_request_body(&self, method : Method, endpoint: &str, body: Body)
+        -> Result<Request<Body>, Box<dyn Error>>
     {
         let uri = DomainUri::new(&self.sock_path, endpoint);
 
@@ -36,6 +37,20 @@ impl Docker
             .method(method)
             .uri(uri)
             .header(header::HOST, "")
+            .body(body)?;
+
+        Ok(request)
+    }
+
+    pub fn build_request(&self, method : Method, endpoint: &str) -> Result<Request<Body>, Box<dyn Error>>
+    {
+        let uri = DomainUri::new(&self.sock_path, endpoint);
+
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "")
+            .header(header::CONTENT_TYPE, "application/tar")
             .body(Body::empty())?;
 
         Ok(request)
@@ -82,6 +97,33 @@ impl Docker
         let request = self.build_request(method, endpoint)?;
 
         let response= self.borrow().client.request(request).await?;
+
+        match response.status()
+        {
+            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT | StatusCode::INTERNAL_SERVER_ERROR
+            =>
+                {
+                    let status_code = response.status();
+
+                    let docker_error = self.parse_error(response).await?;
+
+                    //TODO: custom error with response code
+
+                    return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
+                },
+            _ => ()
+        }
+
+        Ok(response)
+    }
+
+    pub async fn request_body(&self, method : Method, endpoint: &str, body: Body) -> Result<Response<Body>, Box<dyn Error>>
+    {
+        let request = self.build_request_body(method, endpoint, body)?;
+
+        let response= self.borrow().client.request(request).await?;
+
+        println!("{:?}", response.status());
 
         match response.status()
         {

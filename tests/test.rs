@@ -99,11 +99,28 @@ mod tests {
         let images = docker.images();
 
         let result = images
-            .export_image("35c73078fa43", "/home/benas/testas123.tar").await;
+            .export_image("b01b6452ecf7", "/home/benas/testas123.tar").await;
 
         match result
         {
             Ok(()) => println!("Image exported"),
+            Err(error) => panic!("{:?}", error)
+        }
+    }
+
+    #[tokio::test]
+    async fn import_image()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let result = images
+            .import_image("/home/benas/testas123.tar").await;
+
+        match result
+        {
+            Ok(()) => println!("Image imported"),
             Err(error) => panic!("{:?}", error)
         }
     }

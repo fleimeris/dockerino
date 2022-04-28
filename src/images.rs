@@ -1,11 +1,11 @@
 use std::borrow::Borrow;
 use std::error::Error;
-use hyper::Method;
+use hyper::{Body, Method};
 use serde::{Serialize, Deserialize};
 use serde_derive::{Serialize, Deserialize};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 
 use crate::docker::Docker;
 
@@ -244,6 +244,22 @@ impl Images<'_>
         file.write_all(bytes.borrow());
 
         drop(file);
+
+        Ok(())
+    }
+
+    pub async fn import_image(&self, image_path: &str) -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = "/images/load";
+
+        let mut file_handle = File::open(image_path)?;
+        let mut buffer = Vec::default();
+
+        file_handle.read_to_end(&mut buffer)?;
+
+        let body = Body::from(buffer);
+
+        self.docker.borrow().request_body(Method::POST, endpoint, body).await?;
 
         Ok(())
     }
