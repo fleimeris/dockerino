@@ -1,0 +1,45 @@
+# Coverage of Docker Engine API V1.41
+
+- [ ] Containers
+    - [ ] List containers
+    - [ ] Create a container
+    - [ ] Inspect a container
+    - [ ] List processes running inside a container
+    - [ ] Get container logs
+    - [ ] Get changes on a container’s filesystem
+    - [ ] Export a container
+    - [ ] Get container stats based on resource usage
+    - [ ] Resize a container TTY
+    - [ ] Start a container
+    - [ ] Stop a container
+    - [ ] Restart a container
+    - [ ] Kill a container
+    - [ ] Update a container
+    - [ ] Rename a container
+    - [ ] Pause a container
+    - [ ] Unpause a container
+    - [ ] Attach to a container
+    - [ ] Attach to a container via a websocket
+    - [ ] Wait for a container
+    - [ ] Remove a container
+    - [ ] Get information about files in a container
+    - [ ] Get an archive of a filesystem resource in a container
+    - [ ] Extract an archive of files or folders to a directory in a container
+    - [ ] Delete stopped containers
+
+- [ ] Images
+    - [x] List Images
+    - [ ] Build an image
+    - [ ] Delete builder cache
+    - [ ] Create an image
+    - [x] Inspect an image
+    - [x] Get the history of an image
+    - [x] Push an image
+    - [x] Tag an image
+    - [x] Remove an image
+    - [ ] Search images
+    - [ ] Delete unused images
+    - [ ] Create a new image from a container
+    - [x] Export an image
+    - [ ] Export several images
+    - [x] Import images
