@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use hyper::{Body, Method};
 use serde::{Serialize, Deserialize};
@@ -6,8 +7,9 @@ use serde_derive::{Serialize, Deserialize};
 use std::io::{Read, Write};
 use std::fs;
 use std::fs::{File, OpenOptions};
+use base64::{encode, decode};
+use crate::docker::{AuthHeader, Docker};
 
-use crate::docker::Docker;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Image
@@ -155,9 +157,12 @@ impl Images<'_>
         let response = self
             .docker
             .borrow()
-            .request(Method::GET, "/images/json").await?;
+            .request(Method::GET, "/images/json", None, None).await?;
 
-        let images: Vec<Image> = serde_json::from_str(response.as_ref())?;
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let images: Vec<Image> = serde_json::from_str(response_body)?;
 
         Ok(images)
     }
@@ -169,9 +174,12 @@ impl Images<'_>
         let response = self
             .docker
             .borrow()
-            .request(Method::GET, endpoint.as_str()).await?;
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
 
-        let image: ImageDetails = serde_json::from_str(response.as_str())?;
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let image: ImageDetails = serde_json::from_str(response_body)?;
 
         Ok(image)
     }
@@ -183,9 +191,12 @@ impl Images<'_>
         let response = self
             .docker
             .borrow()
-            .request(Method::GET, endpoint.as_str()).await?;
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
 
-        let result: Vec<ImageHistory> = serde_json::from_str(response.as_str())?;
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let result: Vec<ImageHistory> = serde_json::from_str(response_body)?;
 
         Ok(result)
     }
@@ -197,9 +208,12 @@ impl Images<'_>
         let endpoint = format!("/images/{}?force={}&noprune={}", image_name, forced, no_prune);
 
         let response = self.docker.borrow()
-            .request(Method::DELETE, endpoint.as_str()).await?;
+            .request(Method::DELETE, endpoint.as_str(), None, None).await?;
 
-        let result: Vec<ImageDeletionInfo> = serde_json::from_str(response.as_str())?;
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let result: Vec<ImageDeletionInfo> = serde_json::from_str(response_body)?;
 
         Ok(result)
     }
@@ -222,7 +236,7 @@ impl Images<'_>
         };
 
         self.docker.borrow()
-            .request(Method::POST, endpoint.as_str()).await?;
+            .request(Method::POST, endpoint.as_str(), None, None).await?;
 
         Ok(())
     }
@@ -232,7 +246,7 @@ impl Images<'_>
         let endpoint = format!("/images/{}/get", image_name);
 
         let response = self.docker.borrow()
-            .request_get_response(Method::GET, endpoint.as_str()).await?;
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
 
         let bytes = hyper::body::to_bytes(response).await?;
 
@@ -259,8 +273,42 @@ impl Images<'_>
 
         let body = Body::from(buffer);
 
-        self.docker.borrow().request_body(Method::POST, endpoint, body).await?;
+        self.docker.borrow().request(Method::POST, endpoint, Some(body), None).await?;
+
+        drop(file_handle);
 
         Ok(())
+    }
+
+    pub async fn push_image(&self, image_name: &str, server_address: &str, tag: Option<&str>) -> Result<String, Box<dyn Error>>
+    {
+        let mut endpoint = format!("/images/{}/push", image_name);
+
+        if let Some(some_tag) = tag
+        {
+            endpoint.push_str(format!("?tag={}", some_tag).as_str());
+        }
+
+        let auth_header = AuthHeader
+        {
+            username: "".to_string(),
+            password: "".to_string(),
+            email: "".to_string(),
+            serveraddress: server_address.to_string()
+        };
+
+        let auth_header_json = serde_json::to_string(&auth_header)?;
+        let auth_header_base64 = base64::encode(&auth_header_json);
+
+        let mut headers: HashMap<&str, &str> = HashMap::new();
+        headers.insert("X-Registry-Auth", auth_header_base64.as_str());
+
+        let result = self.docker.borrow()
+            .request(Method::POST, endpoint.as_str(), None, Some(headers)).await?;
+
+        let log = self.docker.borrow()
+            .parse_response_body(result).await?;
+
+        Ok(log)
     }
 }

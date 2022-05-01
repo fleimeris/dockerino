@@ -1,4 +1,5 @@
 use std::{borrow::Borrow, str};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use hyper::{client::HttpConnector, body, Client, Method, header, Body, Request, StatusCode, Response};
@@ -8,6 +9,15 @@ use serde_derive::{Serialize, Deserialize};
 use crate::images;
 use crate::images::Images;
 use crate::utils::DockerError;
+
+#[derive(Serialize, Debug)]
+pub struct AuthHeader
+{
+    pub username: String,
+    pub password: String,
+    pub email: String,
+    pub serveraddress: String
+}
 
 pub struct Docker
 {
@@ -28,32 +38,32 @@ impl Docker
         }
     }
 
-    pub fn build_request_body(&self, method : Method, endpoint: &str, body: Body)
+    pub fn build_request(&self, method: Method, endpoint: &str, body: Option<Body>,
+                     header: Option<HashMap<&str, &str>>)
         -> Result<Request<Body>, Box<dyn Error>>
     {
-        let uri = DomainUri::new(&self.sock_path, endpoint);
+        let url = DomainUri::new(&self.sock_path, endpoint);
 
         let request = Request::builder()
             .method(method)
-            .uri(uri)
-            .header(header::HOST, "")
-            .body(body)?;
+            .uri(url);
 
-        Ok(request)
-    }
+        let mut request = request.header(header::HOST, "");
 
-    pub fn build_request(&self, method : Method, endpoint: &str) -> Result<Request<Body>, Box<dyn Error>>
-    {
-        let uri = DomainUri::new(&self.sock_path, endpoint);
+        if let Some(header) = header
+        {
+            for (key, value) in header
+            {
+                request = request.header(key, value);
+            }
+        }
 
-        let request = Request::builder()
-            .method(method)
-            .uri(uri)
-            .header(header::HOST, "")
-            .header(header::CONTENT_TYPE, "application/tar")
-            .body(Body::empty())?;
+        if let Some(body) = body
+        {
+            return Ok(request.body(body)?)
+        }
 
-        Ok(request)
+        Ok(request.body(Body::empty())?)
     }
 
     pub async fn parse_response_body(&self, response: Response<Body>) -> Result<String, Box<dyn Error>>
@@ -65,9 +75,11 @@ impl Docker
         Ok(json.parse()?)
     }
 
-    pub async fn request(&self, method : Method, endpoint: &str) -> Result<String, Box<dyn Error>>
+    pub async fn request(&self, method : Method, endpoint: &str, body: Option<Body>,
+                         header: Option<HashMap<&str, &str>>)
+        -> Result<Response<Body>, Box<dyn Error>>
     {
-        let request = self.build_request(method, endpoint)?;
+        let request = self.build_request(method, endpoint, body, header)?;
 
         let response = self.borrow().client.request(request).await?;
 
@@ -84,60 +96,6 @@ impl Docker
 
                 return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
             },
-            _ => ()
-        }
-
-        let json_body = self.parse_response_body(response).await?;
-
-        Ok(json_body.parse()?)
-    }
-
-    pub async fn request_get_response(&self, method : Method, endpoint: &str) -> Result<Response<Body>, Box<dyn Error>>
-    {
-        let request = self.build_request(method, endpoint)?;
-
-        let response= self.borrow().client.request(request).await?;
-
-        match response.status()
-        {
-            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT | StatusCode::INTERNAL_SERVER_ERROR
-            =>
-                {
-                    let status_code = response.status();
-
-                    let docker_error = self.parse_error(response).await?;
-
-                    //TODO: custom error with response code
-
-                    return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
-                },
-            _ => ()
-        }
-
-        Ok(response)
-    }
-
-    pub async fn request_body(&self, method : Method, endpoint: &str, body: Body) -> Result<Response<Body>, Box<dyn Error>>
-    {
-        let request = self.build_request_body(method, endpoint, body)?;
-
-        let response= self.borrow().client.request(request).await?;
-
-        println!("{:?}", response.status());
-
-        match response.status()
-        {
-            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND | StatusCode::CONFLICT | StatusCode::INTERNAL_SERVER_ERROR
-            =>
-                {
-                    let status_code = response.status();
-
-                    let docker_error = self.parse_error(response).await?;
-
-                    //TODO: custom error with response code
-
-                    return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
-                },
             _ => ()
         }
 

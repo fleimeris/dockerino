@@ -124,4 +124,25 @@ mod tests {
             Err(error) => panic!("{:?}", error)
         }
     }
+
+    #[tokio::test]
+    async fn push_image()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        images.tag_image("7d49d79ed7b5", Some("localhost:5000/test_push"),
+                         Some("test")).await.expect("Failed to tag image");
+
+        let result = images
+            .push_image("localhost:5000/test_push", "registry",
+                        Some("test")).await;
+
+        match result
+        {
+            Ok(()) => println!("Image pushed"),
+            Err(error) => panic!("{:?}", error)
+        }
+    }
 }
