@@ -7,7 +7,7 @@ mod tests {
     use dockerino::docker::Docker;
 
     #[tokio::test]
-    async fn it_works() {
+    async fn get_all_images() {
         let docker = Docker::new(String::from("/var/run/docker.sock"));
 
         let images = docker.images();
