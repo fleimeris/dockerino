@@ -136,56 +136,62 @@ pub struct ImageHistory
     comment: String
 }
 
-#[derive(Serialize, Deserialize, Debug)]
 pub struct ListImagesFilter
 {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dangling: Option<bool>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reference: Option<String>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub since: Option<String>
+    params: HashMap<String, Vec<String>>
 }
 
 impl ListImagesFilter {
+
+    pub fn new() -> Self
+    {
+        ListImagesFilter
+        {
+            params: HashMap::new()
+        }
+    }
+
+    pub fn before(&mut self, before: String) -> &mut Self
+    {
+        self.params.insert("before".parse().unwrap(), vec![before]);
+        self
+    }
+
+    pub fn dangling(&mut self, dangling: bool) -> &mut Self
+    {
+        self.params.insert("dangling".parse().unwrap(), vec![dangling.to_string()]);
+        self
+    }
+
+    pub fn label(&mut self, label: String) -> &mut Self
+    {
+        self.params.insert("label".parse().unwrap(), vec![label]);
+        self
+    }
+
+    pub fn reference(&mut self, reference: String) -> &mut Self
+    {
+        self.params.insert("reference".parse().unwrap(), vec![reference]);
+        self
+    }
+
+    pub fn since(&mut self, since: String) -> &mut Self
+    {
+        self.params.insert("since".parse().unwrap(), vec![since]);
+        self
+    }
+
+    pub fn build(&self) -> ListImagesFilter
+    {
+        ListImagesFilter
+        {
+            params: self.params.clone()
+        }
+    }
+
     pub fn url_encoded(self) -> Result<String, Box<dyn Error>>
     {
-        let mut params_list = HashMap::new();
-
-        if let Some(before) = self.before
-        {
-            params_list.insert("before", vec![before]);
-        }
-
-        if let Some(dangling) = self.dangling
-        {
-            params_list.insert("dangling", vec![dangling.to_string()]);
-        }
-
-        if let Some(label) = self.label
-        {
-            params_list.insert("label", vec![label]);
-        }
-
-        if let Some(reference) = self.reference
-        {
-            params_list.insert("reference", vec![reference]);
-        }
-
-        if let Some(since) = self.since
-        {
-            params_list.insert("since", vec![since]);
-        }
-
-        let json = serde_json::to_string(&params_list)?;
+        let json = serde_json::to_string(&self.params)?;
         let url_encoded = urlencoding::encode(json.as_str());
 
         Ok(url_encoded.to_string())

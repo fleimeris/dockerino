@@ -4,6 +4,7 @@ use tokio;
 #[cfg(test)]
 mod tests {
     use std::borrow::Borrow;
+    use std::ops::Deref;
     use dockerino::docker::Docker;
     use dockerino::images::ListImagesFilter;
 
@@ -28,14 +29,9 @@ mod tests {
 
         let images = docker.images();
         
-        let filter = ListImagesFilter
-        {
-            before: None,
-            dangling: Some(true),
-            label: None,
-            reference: None,
-            since: None
-        };
+        let filter = ListImagesFilter::new()
+            .dangling(true)
+            .build();
 
         let all_images = images.get_images_all(Some(filter)).await;
 
