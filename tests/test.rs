@@ -20,8 +20,6 @@ mod tests {
             Ok(images) => println!("{:?}", images),
             Err(error) => panic!("{:?}", error)
         }
-
-        assert_eq!(2 + 2, 4);
     }
 
     #[tokio::test]

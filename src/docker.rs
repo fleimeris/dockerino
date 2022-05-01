@@ -1,10 +1,10 @@
 use std::{borrow::Borrow, str};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use hyper::{client::HttpConnector, body, Client, Method, header, Body, Request, StatusCode, Response};
+use std::fmt::Debug;
+use hyper::{Client, Method, header, Body, Request, StatusCode, Response};
 use hyperlocal::{UnixConnector, Uri as DomainUri};
-use serde_derive::{Serialize, Deserialize};
+use serde_derive::{Serialize};
 
 use crate::images;
 use crate::images::Images;
@@ -106,9 +106,9 @@ impl Docker
     {
         let body = self.parse_response_body(response).await?;
 
-        let dockerError: DockerError = serde_json::from_str(body.as_str())?;
+        let docker_error: DockerError = serde_json::from_str(body.as_str())?;
 
-        Ok(dockerError)
+        Ok(docker_error)
     }
 
     pub fn images(&self) -> Images

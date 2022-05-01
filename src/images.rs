@@ -1,23 +1,23 @@
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use hyper::{Body, Method};
-use serde::{Serialize, Deserialize};
 use serde_derive::{Serialize, Deserialize};
 use std::io::{Read, Write};
 use std::fs::{File, OpenOptions};
-use base64::{encode, decode};
+use base64;
 use urlencoding;
 use crate::docker::{AuthHeader, Docker};
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
 pub struct Image
 {
-    ParentId: String,
-    Created: i128,
-    Size: i128,
-    SharedSize: i128,
-    Containers: i128,
+    parent_id: String,
+    created: i128,
+    size: i128,
+    shared_size: i128,
+    containers: i128,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -291,7 +291,7 @@ impl Images<'_>
             None => endpoint.replace("!repo_name!", "")
         };
 
-        let mut endpoint = match tag
+        endpoint = match tag
         {
             Some(tag) => endpoint.replace("!tag_name!", tag),
             None => endpoint.replace("!tag_name!", "")
@@ -317,7 +317,7 @@ impl Images<'_>
             .create(true)
             .open(file_path)?;
 
-        file.write_all(bytes.borrow());
+        file.write_all(bytes.borrow())?;
 
         drop(file);
 
