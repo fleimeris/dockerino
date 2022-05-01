@@ -5,6 +5,7 @@ use tokio;
 mod tests {
     use std::borrow::Borrow;
     use dockerino::docker::Docker;
+    use dockerino::images::ListImagesFilter;
 
     #[tokio::test]
     async fn get_all_images() {
@@ -12,11 +13,37 @@ mod tests {
 
         let images = docker.images();
 
-        let all_images = images.get_images_all().await;
+        let all_images = images.get_images_all(None).await;
 
         match all_images
         {
             Ok(images) => println!("{:?}", images),
+            Err(error) => panic!("{:?}", error)
+        }
+
+        assert_eq!(2 + 2, 4);
+    }
+
+    #[tokio::test]
+    async fn get_all_images_with_filter() {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+        
+        let filter = ListImagesFilter
+        {
+            before: None,
+            dangling: Some(true),
+            label: None,
+            reference: None,
+            since: None
+        };
+
+        let all_images = images.get_images_all(Some(filter)).await;
+
+        match all_images
+        {
+            Ok(images) => println!("{:?}", images.len()),
             Err(error) => panic!("{:?}", error)
         }
 
@@ -141,7 +168,7 @@ mod tests {
 
         match result
         {
-            Ok(()) => println!("Image pushed"),
+            Ok(result) => println!("Image pushed"),
             Err(error) => panic!("{:?}", error)
         }
     }

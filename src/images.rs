@@ -5,11 +5,10 @@ use hyper::{Body, Method};
 use serde::{Serialize, Deserialize};
 use serde_derive::{Serialize, Deserialize};
 use std::io::{Read, Write};
-use std::fs;
 use std::fs::{File, OpenOptions};
 use base64::{encode, decode};
+use urlencoding;
 use crate::docker::{AuthHeader, Docker};
-
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Image
@@ -137,6 +136,62 @@ pub struct ImageHistory
     comment: String
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ListImagesFilter
+{
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dangling: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<String>
+}
+
+impl ListImagesFilter {
+    pub fn url_encoded(self) -> Result<String, Box<dyn Error>>
+    {
+        let mut params_list = HashMap::new();
+
+        if let Some(before) = self.before
+        {
+            params_list.insert("before", vec![before]);
+        }
+
+        if let Some(dangling) = self.dangling
+        {
+            params_list.insert("dangling", vec![dangling.to_string()]);
+        }
+
+        if let Some(label) = self.label
+        {
+            params_list.insert("label", vec![label]);
+        }
+
+        if let Some(reference) = self.reference
+        {
+            params_list.insert("reference", vec![reference]);
+        }
+
+        if let Some(since) = self.since
+        {
+            params_list.insert("since", vec![since]);
+        }
+
+        let json = serde_json::to_string(&params_list)?;
+        let url_encoded = urlencoding::encode(json.as_str());
+
+        Ok(url_encoded.to_string())
+    }
+}
+
 pub struct Images<'a>
 {
     docker: &'a Docker
@@ -152,12 +207,19 @@ impl Images<'_>
         }
     }
 
-    pub async fn get_images_all(&self) -> Result<Vec<Image>, Box<dyn Error>>
+    pub async fn get_images_all(&self, filter: Option<ListImagesFilter>) -> Result<Vec<Image>, Box<dyn Error>>
     {
+        let mut endpoint = format!("/images/json");
+
+        if let Some(filter) = filter
+        {
+            endpoint.push_str(format!("?filters={}", filter.url_encoded()?).as_str())
+        }
+
         let response = self
             .docker
             .borrow()
-            .request(Method::GET, "/images/json", None, None).await?;
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
 
         let response_body = &self.docker.borrow()
             .parse_response_body(response).await?;
