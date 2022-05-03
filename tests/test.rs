@@ -5,8 +5,9 @@ use tokio;
 mod tests {
     use std::borrow::Borrow;
     use std::ops::Deref;
+    use serde::de::Unexpected::Str;
     use dockerino::docker::Docker;
-    use dockerino::images::ListImagesFilter;
+    use dockerino::images::{DockerBuildBuilder, ListImagesFilter};
 
     #[tokio::test]
     async fn get_all_images() {
@@ -165,5 +166,21 @@ mod tests {
             Ok(result) => println!("Image pushed"),
             Err(error) => panic!("{:?}", error)
         }
+    }
+
+    #[tokio::test]
+    async fn build_image()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let result = images.build_image("/home/benas/test", None).await;
+
+        match result
+        {
+            Err(error) => panic!("{:?}", error),
+            Ok(result) => println!("{:?}", result)
+        };
     }
 }

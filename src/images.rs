@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 use hyper::{Body, Method};
 use serde_derive::{Serialize, Deserialize};
 use std::io::{Read, Write};
@@ -8,6 +9,8 @@ use std::fs::{File, OpenOptions};
 use base64;
 use urlencoding;
 use crate::docker::{AuthHeader, Docker};
+use flate2::{Compression, write::GzEncoder};
+use tar::Builder;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -189,7 +192,195 @@ impl ListImagesFilter {
         }
     }
 
-    pub fn url_encoded(self) -> Result<String, Box<dyn Error>>
+    pub fn url_encoded(&self) -> Result<String, Box<dyn Error>>
+    {
+        let json = serde_json::to_string(&self.params)?;
+        let url_encoded = urlencoding::encode(json.as_str());
+
+        Ok(url_encoded.to_string())
+    }
+}
+
+#[derive(Serialize)]
+pub struct DockerBuildBuilder<'a>
+{
+    params: HashMap<&'a str, String>
+}
+
+impl DockerBuildBuilder<'_> {
+
+    pub fn new() -> Self
+    {
+        DockerBuildBuilder
+        {
+            params: HashMap::new()
+        }
+    }
+
+    pub fn dockerfile(&mut self, dockerfile: String) -> &mut Self
+    {
+        self.params.insert("dockerfile", dockerfile);
+        self
+    }
+
+    pub fn tag(&mut self, tag: String) -> &mut Self
+    {
+        self.params.insert("t", tag);
+        self
+    }
+
+    pub fn extrahosts(&mut self, extra_hosts: String) -> &mut Self
+    {
+        self.params.insert("extrahosts", extra_hosts);
+        self
+    }
+
+    pub fn remote(&mut self, remote: String) -> &mut Self
+    {
+        self.params.insert("remote", remote);
+        self
+    }
+
+    pub fn verbose(&mut self, verbose_enabled: bool) -> &mut Self
+    {
+        self.params.insert("q", verbose_enabled.to_string());
+        self
+    }
+
+    pub fn no_cache(&mut self, no_cache_enabled: bool) -> &mut Self
+    {
+        self.params.insert("nocache", no_cache_enabled.to_string());
+        self
+    }
+
+    pub fn cache_from(&mut self, image: String) -> &mut Self
+    {
+        self.params.insert("cachefrom", image);
+        self
+    }
+
+    pub fn cache_from_multiple(&mut self, images: Vec<String>) -> &mut Self
+    {
+        let json_images = serde_json::to_string(&images).unwrap();
+        self.params.insert("cachefrom", json_images);
+        self
+    }
+
+    pub fn pull(&mut self, pull_enabled: bool) -> &mut Self
+    {
+        self.params.insert("pull", pull_enabled.to_string());
+        self
+    }
+
+    pub fn remove_after_build(&mut self, remove_enabled: bool) -> &mut Self
+    {
+        self.params.insert("rm", remove_enabled.to_string());
+        self
+    }
+
+    pub fn force_remove_after_build(&mut self, force_enabled: bool) -> &mut Self
+    {
+        self.params.insert("forcerm", force_enabled.to_string());
+        self
+    }
+
+    pub fn memory_limit(&mut self, size_limit: i32) -> &mut Self
+    {
+        self.params.insert("memory", size_limit.to_string());
+        self
+    }
+
+    pub fn swap_size(&mut self, swap_size: i32) -> &mut Self
+    {
+        self.params.insert("memswap", swap_size.to_string());
+        self
+    }
+
+    pub fn cpu_shares(&mut self, weight: i32) -> &mut Self
+    {
+        self.params.insert("cpushares", weight.to_string());
+        self
+    }
+
+    pub fn set_cpus(&mut self, cpus: String) -> &mut Self
+    {
+        self.params.insert("cpusetcpus", cpus);
+        self
+    }
+
+    pub fn cpu_period(&mut self, period: i32) -> &mut Self
+    {
+        self.params.insert("cpuperiod", period.to_string());
+        self
+    }
+
+    pub fn cpu_quota(&mut self, cpu_quota: i32) -> &mut Self
+    {
+        self.params.insert("cpuquota", cpu_quota.to_string());
+        self
+    }
+
+    pub fn build_args(&mut self, args: HashMap<&str, String>) -> &mut Self
+    {
+        let json_args = serde_json::to_string(&args).unwrap();
+
+        self.params.insert("buildargs", json_args);
+        self
+    }
+
+    pub fn shm_size(&mut self, size: i32) -> &mut Self
+    {
+        self.params.insert("shmsize", size.to_string());
+        self
+    }
+
+    pub fn squash(&mut self, squashing_enabled: bool) -> &mut Self
+    {
+        self.params.insert("squash", squashing_enabled.to_string());
+        self
+    }
+
+    pub fn labels(&mut self, labels: Vec<String>) -> &mut Self
+    {
+        let json_labels = serde_json::to_string(&labels).unwrap();
+
+        self.params.insert("labels", json_labels);
+        self
+    }
+
+    pub fn network_mode(&mut self, mode: String) -> &mut Self
+    {
+        self.params.insert("networkmode", mode);
+        self
+    }
+
+    pub fn platform(&mut self, platform: String) -> &mut Self
+    {
+        self.params.insert("platform", platform);
+        self
+    }
+
+    pub fn target(&mut self, target: String) -> &mut Self
+    {
+        self.params.insert("target", target);
+        self
+    }
+
+    pub fn outputs(&mut self, outputs: String) -> &mut Self
+    {
+        self.params.insert("outputs", outputs);
+        self
+    }
+
+    pub fn build(&self) -> DockerBuildBuilder
+    {
+        DockerBuildBuilder
+        {
+            params: self.params.clone()
+        }
+    }
+
+    pub fn url_encoded(&self) -> Result<String, Box<dyn Error>>
     {
         let json = serde_json::to_string(&self.params)?;
         let url_encoded = urlencoding::encode(json.as_str());
@@ -378,5 +569,36 @@ impl Images<'_>
             .parse_response_body(result).await?;
 
         Ok(log)
+    }
+
+    pub async fn build_image<'b>(&self, folder_path: &str, build_params: Option<DockerBuildBuilder<'b>>)
+        -> Result<String, Box<dyn Error>>
+    {
+        let mut endpoint = String::from("/build?t=thisisatest");
+
+        if let Some(build_params) = build_params
+        {
+            endpoint.push_str(format!("?{:?}", build_params.url_encoded()).as_str());
+        }
+
+        let mut bytes = Vec::default();
+
+        {
+            let mut archive = Builder::new(GzEncoder::new(&mut bytes, Compression::best()));
+            archive.append_dir_all("", folder_path)?;
+        }
+
+        let body = Body::from(bytes);
+
+        let mut headers: HashMap<&str, &str> = HashMap::new();
+        headers.insert("Content-type", "application/x-tar");
+
+        let response = self.docker
+            .request(Method::POST, endpoint.as_str(), Some(body),
+            Some(headers)).await?;
+
+        let result = self.docker.parse_response_body(response).await?;
+
+        Ok(result)
     }
 }
