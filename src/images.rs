@@ -1,16 +1,224 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs;
 use hyper::{Body, Method};
 use serde_derive::{Serialize, Deserialize};
 use std::io::{Read, Write};
 use std::fs::{File, OpenOptions};
 use base64;
-use urlencoding;
 use crate::docker::{AuthHeader, Docker};
 use flate2::{Compression, write::GzEncoder};
 use tar::Builder;
+use crate::utils::ObjectConverter;
+
+impl Images<'_>
+{
+    pub fn new(docker: &'_ Docker) -> Images
+    {
+        Images
+        {
+            docker
+        }
+    }
+
+    pub async fn get_images_all(&self, filter: Option<ListImagesFilter>) -> Result<Vec<Image>, Box<dyn Error>>
+    {
+        let mut endpoint = format!("/images/json");
+
+        if let Some(filter) = filter
+        {
+            endpoint.push_str(format!("?filters={}", filter.url_encoded(&filter.params)?).as_str())
+        }
+
+        let response = self
+            .docker
+            .borrow()
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
+
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let images: Vec<Image> = serde_json::from_str(response_body)?;
+
+        Ok(images)
+    }
+
+    pub async fn get_image(&self, image_name: &str) -> Result<ImageDetails, Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/json", image_name);
+
+        let response = self
+            .docker
+            .borrow()
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
+
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let image: ImageDetails = serde_json::from_str(response_body)?;
+
+        Ok(image)
+    }
+
+    pub async fn get_image_history(&self, image_name: &str) -> Result<Vec<ImageHistory>, Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/history", image_name);
+
+        let response = self
+            .docker
+            .borrow()
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
+
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let result: Vec<ImageHistory> = serde_json::from_str(response_body)?;
+
+        Ok(result)
+    }
+
+    //TODO: add return method, which returns about deleted image
+    pub async fn delete_image(&self, image_name: &str, forced: bool, no_prune: bool)
+        -> Result<Vec<ImageDeletionInfo>, Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}?force={}&noprune={}", image_name, forced, no_prune);
+
+        let response = self.docker.borrow()
+            .request(Method::DELETE, endpoint.as_str(), None, None).await?;
+
+        let response_body = &self.docker.borrow()
+            .parse_response_body(response).await?;
+
+        let result: Vec<ImageDeletionInfo> = serde_json::from_str(response_body)?;
+
+        Ok(result)
+    }
+
+    pub async fn tag_image(&self, image_name: &str, repo_name: Option<&str>, tag: Option<&str>)
+        -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/tag?repo=!repo_name!&tag=!tag_name!", image_name);
+
+        let mut endpoint = match repo_name
+        {
+            Some(repo_name) => endpoint.replace("!repo_name!", repo_name),
+            None => endpoint.replace("!repo_name!", "")
+        };
+
+        endpoint = match tag
+        {
+            Some(tag) => endpoint.replace("!tag_name!", tag),
+            None => endpoint.replace("!tag_name!", "")
+        };
+
+        self.docker.borrow()
+            .request(Method::POST, endpoint.as_str(), None, None).await?;
+
+        Ok(())
+    }
+
+    pub async fn export_image(&self, image_name: &str, file_path: &str) -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = format!("/images/{}/get", image_name);
+
+        let response = self.docker.borrow()
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
+
+        let bytes = hyper::body::to_bytes(response).await?;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(file_path)?;
+
+        file.write_all(bytes.borrow())?;
+
+        drop(file);
+
+        Ok(())
+    }
+
+    pub async fn import_image(&self, image_path: &str) -> Result<(), Box<dyn Error>>
+    {
+        let endpoint = "/images/load";
+
+        let mut file_handle = File::open(image_path)?;
+        let mut buffer = Vec::default();
+
+        file_handle.read_to_end(&mut buffer)?;
+
+        let body = Body::from(buffer);
+
+        self.docker.borrow().request(Method::POST, endpoint, Some(body), None).await?;
+
+        drop(file_handle);
+
+        Ok(())
+    }
+
+    pub async fn push_image(&self, image_name: &str, server_address: &str, tag: Option<&str>) -> Result<String, Box<dyn Error>>
+    {
+        let mut endpoint = format!("/images/{}/push", image_name);
+
+        if let Some(some_tag) = tag
+        {
+            endpoint.push_str(format!("?tag={}", some_tag).as_str());
+        }
+
+        let auth_header = AuthHeader
+        {
+            username: "".to_string(),
+            password: "".to_string(),
+            email: "".to_string(),
+            serveraddress: server_address.to_string()
+        };
+
+        let auth_header_json = serde_json::to_string(&auth_header)?;
+        let auth_header_base64 = base64::encode(&auth_header_json);
+
+        let mut headers: HashMap<&str, &str> = HashMap::new();
+        headers.insert("X-Registry-Auth", auth_header_base64.as_str());
+
+        let result = self.docker.borrow()
+            .request(Method::POST, endpoint.as_str(), None, Some(headers)).await?;
+
+        let log = self.docker.borrow()
+            .parse_response_body(result).await?;
+
+        Ok(log)
+    }
+
+    pub async fn build_image(&self, folder_path: &str, build_params: Option<DockerBuildParams>)
+        -> Result<String, Box<dyn Error>>
+    {
+        let mut endpoint = String::from("/build");
+
+        if let Some(build_params) = build_params
+        {
+            endpoint.push_str(format!("?{}", build_params.parse_params(&build_params.params)?).as_str());
+        }
+
+        let mut bytes = Vec::default();
+
+        {
+            let mut archive = Builder::new(GzEncoder::new(&mut bytes, Compression::best()));
+            archive.append_dir_all("", folder_path)?;
+        }
+
+        let body = Body::from(bytes);
+
+        let mut headers: HashMap<&str, &str> = HashMap::new();
+        headers.insert("Content-type", "application/x-tar");
+
+        let response = self.docker
+            .request(Method::POST, endpoint.as_str(), Some(body),
+            Some(headers)).await?;
+
+        let result = self.docker.parse_response_body(response).await?;
+
+        Ok(result)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -141,7 +349,7 @@ pub struct ImageHistory
 
 pub struct ListImagesFilter
 {
-    params: HashMap<String, Vec<String>>
+    params: HashMap<&'static str, Vec<String>>
 }
 
 impl ListImagesFilter {
@@ -156,31 +364,31 @@ impl ListImagesFilter {
 
     pub fn before(&mut self, before: String) -> &mut Self
     {
-        self.params.insert("before".parse().unwrap(), vec![before]);
+        self.params.insert("before", vec![before]);
         self
     }
 
     pub fn dangling(&mut self, dangling: bool) -> &mut Self
     {
-        self.params.insert("dangling".parse().unwrap(), vec![dangling.to_string()]);
+        self.params.insert("dangling", vec![dangling.to_string()]);
         self
     }
 
     pub fn label(&mut self, label: String) -> &mut Self
     {
-        self.params.insert("label".parse().unwrap(), vec![label]);
+        self.params.insert("label", vec![label]);
         self
     }
 
     pub fn reference(&mut self, reference: String) -> &mut Self
     {
-        self.params.insert("reference".parse().unwrap(), vec![reference]);
+        self.params.insert("reference", vec![reference]);
         self
     }
 
     pub fn since(&mut self, since: String) -> &mut Self
     {
-        self.params.insert("since".parse().unwrap(), vec![since]);
+        self.params.insert("since", vec![since]);
         self
     }
 
@@ -191,44 +399,18 @@ impl ListImagesFilter {
             params: self.params.clone()
         }
     }
-
-    pub fn url_encoded(&self) -> Result<String, Box<dyn Error>>
-    {
-        let json = serde_json::to_string(&self.params)?;
-        let url_encoded = urlencoding::encode(json.as_str());
-
-        Ok(url_encoded.to_string())
-    }
 }
+
+impl ObjectConverter for ListImagesFilter
+{}
 
 pub struct DockerBuildParams
 {
     params: HashMap<&'static str, String>
 }
 
-impl DockerBuildParams {
-    pub fn url_encoded(self) -> Result<String, Box<dyn Error>>
-    {
-        let mut result = String::new();
-
-        let mut first = true;
-
-        for (key, value) in self.params
-        {
-            if first
-            {
-                result.push_str(format!("{}={}", key, value).as_str());
-            }
-            else
-            {
-                result.push_str(format!("&{}={}", key, value).as_str());
-            }
-
-            first = false;
-        }
-
-        Ok(result)
-    }
+impl ObjectConverter for DockerBuildParams
+{
 }
 
 pub struct DockerBuildParamsBuilder
@@ -236,7 +418,8 @@ pub struct DockerBuildParamsBuilder
     params: HashMap<&'static str, String>
 }
 
-impl DockerBuildParamsBuilder {
+impl DockerBuildParamsBuilder
+{
 
     pub fn new() -> Self
     {
@@ -413,213 +596,4 @@ impl DockerBuildParamsBuilder {
 pub struct Images<'a>
 {
     docker: &'a Docker
-}
-
-impl Images<'_>
-{
-    pub fn new(docker: &'_ Docker) -> Images
-    {
-        Images
-        {
-            docker
-        }
-    }
-
-    pub async fn get_images_all(&self, filter: Option<ListImagesFilter>) -> Result<Vec<Image>, Box<dyn Error>>
-    {
-        let mut endpoint = format!("/images/json");
-
-        if let Some(filter) = filter
-        {
-            endpoint.push_str(format!("?filters={}", filter.url_encoded()?).as_str())
-        }
-
-        let response = self
-            .docker
-            .borrow()
-            .request(Method::GET, endpoint.as_str(), None, None).await?;
-
-        let response_body = &self.docker.borrow()
-            .parse_response_body(response).await?;
-
-        let images: Vec<Image> = serde_json::from_str(response_body)?;
-
-        Ok(images)
-    }
-
-    pub async fn get_image(&self, image_name: &str) -> Result<ImageDetails, Box<dyn Error>>
-    {
-        let endpoint = format!("/images/{}/json", image_name);
-
-        let response = self
-            .docker
-            .borrow()
-            .request(Method::GET, endpoint.as_str(), None, None).await?;
-
-        let response_body = &self.docker.borrow()
-            .parse_response_body(response).await?;
-
-        let image: ImageDetails = serde_json::from_str(response_body)?;
-
-        Ok(image)
-    }
-
-    pub async fn get_image_history(&self, image_name: &str) -> Result<Vec<ImageHistory>, Box<dyn Error>>
-    {
-        let endpoint = format!("/images/{}/history", image_name);
-
-        let response = self
-            .docker
-            .borrow()
-            .request(Method::GET, endpoint.as_str(), None, None).await?;
-
-        let response_body = &self.docker.borrow()
-            .parse_response_body(response).await?;
-
-        let result: Vec<ImageHistory> = serde_json::from_str(response_body)?;
-
-        Ok(result)
-    }
-
-    //TODO: add return method, which returns about deleted image
-    pub async fn delete_image(&self, image_name: &str, forced: bool, no_prune: bool)
-        -> Result<Vec<ImageDeletionInfo>, Box<dyn Error>>
-    {
-        let endpoint = format!("/images/{}?force={}&noprune={}", image_name, forced, no_prune);
-
-        let response = self.docker.borrow()
-            .request(Method::DELETE, endpoint.as_str(), None, None).await?;
-
-        let response_body = &self.docker.borrow()
-            .parse_response_body(response).await?;
-
-        let result: Vec<ImageDeletionInfo> = serde_json::from_str(response_body)?;
-
-        Ok(result)
-    }
-
-    pub async fn tag_image(&self, image_name: &str, repo_name: Option<&str>, tag: Option<&str>)
-        -> Result<(), Box<dyn Error>>
-    {
-        let endpoint = format!("/images/{}/tag?repo=!repo_name!&tag=!tag_name!", image_name);
-
-        let mut endpoint = match repo_name
-        {
-            Some(repo_name) => endpoint.replace("!repo_name!", repo_name),
-            None => endpoint.replace("!repo_name!", "")
-        };
-
-        endpoint = match tag
-        {
-            Some(tag) => endpoint.replace("!tag_name!", tag),
-            None => endpoint.replace("!tag_name!", "")
-        };
-
-        self.docker.borrow()
-            .request(Method::POST, endpoint.as_str(), None, None).await?;
-
-        Ok(())
-    }
-
-    pub async fn export_image(&self, image_name: &str, file_path: &str) -> Result<(), Box<dyn Error>>
-    {
-        let endpoint = format!("/images/{}/get", image_name);
-
-        let response = self.docker.borrow()
-            .request(Method::GET, endpoint.as_str(), None, None).await?;
-
-        let bytes = hyper::body::to_bytes(response).await?;
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(file_path)?;
-
-        file.write_all(bytes.borrow())?;
-
-        drop(file);
-
-        Ok(())
-    }
-
-    pub async fn import_image(&self, image_path: &str) -> Result<(), Box<dyn Error>>
-    {
-        let endpoint = "/images/load";
-
-        let mut file_handle = File::open(image_path)?;
-        let mut buffer = Vec::default();
-
-        file_handle.read_to_end(&mut buffer)?;
-
-        let body = Body::from(buffer);
-
-        self.docker.borrow().request(Method::POST, endpoint, Some(body), None).await?;
-
-        drop(file_handle);
-
-        Ok(())
-    }
-
-    pub async fn push_image(&self, image_name: &str, server_address: &str, tag: Option<&str>) -> Result<String, Box<dyn Error>>
-    {
-        let mut endpoint = format!("/images/{}/push", image_name);
-
-        if let Some(some_tag) = tag
-        {
-            endpoint.push_str(format!("?tag={}", some_tag).as_str());
-        }
-
-        let auth_header = AuthHeader
-        {
-            username: "".to_string(),
-            password: "".to_string(),
-            email: "".to_string(),
-            serveraddress: server_address.to_string()
-        };
-
-        let auth_header_json = serde_json::to_string(&auth_header)?;
-        let auth_header_base64 = base64::encode(&auth_header_json);
-
-        let mut headers: HashMap<&str, &str> = HashMap::new();
-        headers.insert("X-Registry-Auth", auth_header_base64.as_str());
-
-        let result = self.docker.borrow()
-            .request(Method::POST, endpoint.as_str(), None, Some(headers)).await?;
-
-        let log = self.docker.borrow()
-            .parse_response_body(result).await?;
-
-        Ok(log)
-    }
-
-    pub async fn build_image(&self, folder_path: &str, build_params: Option<DockerBuildParams>)
-        -> Result<String, Box<dyn Error>>
-    {
-        let mut endpoint = String::from("/build");
-
-        if let Some(build_params) = build_params
-        {
-            endpoint.push_str(format!("?{}", build_params.url_encoded()?).as_str());
-        }
-
-        let mut bytes = Vec::default();
-
-        {
-            let mut archive = Builder::new(GzEncoder::new(&mut bytes, Compression::best()));
-            archive.append_dir_all("", folder_path)?;
-        }
-
-        let body = Body::from(bytes);
-
-        let mut headers: HashMap<&str, &str> = HashMap::new();
-        headers.insert("Content-type", "application/x-tar");
-
-        let response = self.docker
-            .request(Method::POST, endpoint.as_str(), Some(body),
-            Some(headers)).await?;
-
-        let result = self.docker.parse_response_body(response).await?;
-
-        Ok(result)
-    }
 }
