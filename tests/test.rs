@@ -7,7 +7,7 @@ mod tests {
     use std::ops::Deref;
     use serde::de::Unexpected::Str;
     use dockerino::docker::Docker;
-    use dockerino::images::{DockerBuildBuilder, ListImagesFilter};
+    use dockerino::images::{DockerBuildParamsBuilder, ListImagesFilter};
 
     #[tokio::test]
     async fn get_all_images() {
@@ -175,7 +175,9 @@ mod tests {
 
         let images = docker.images();
 
-        let result = images.build_image("/home/benas/test", None).await;
+        let params = DockerBuildParamsBuilder::new().tag("t".to_string()).build();
+
+        let result = images.build_image("/home/benas/test", Some(params)).await;
 
         match result
         {

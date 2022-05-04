@@ -201,17 +201,46 @@ impl ListImagesFilter {
     }
 }
 
-#[derive(Serialize)]
-pub struct DockerBuildBuilder<'a>
+pub struct DockerBuildParams
 {
-    params: HashMap<&'a str, String>
+    params: HashMap<&'static str, String>
 }
 
-impl DockerBuildBuilder<'_> {
+impl DockerBuildParams {
+    pub fn url_encoded(self) -> Result<String, Box<dyn Error>>
+    {
+        let mut result = String::new();
+
+        let mut first = true;
+
+        for (key, value) in self.params
+        {
+            if first
+            {
+                result.push_str(format!("{}={}", key, value).as_str());
+            }
+            else
+            {
+                result.push_str(format!("&{}={}", key, value).as_str());
+            }
+
+            first = false;
+        }
+
+        Ok(result)
+    }
+}
+
+pub struct DockerBuildParamsBuilder
+{
+    params: HashMap<&'static str, String>
+}
+
+impl DockerBuildParamsBuilder {
 
     pub fn new() -> Self
     {
-        DockerBuildBuilder
+        DockerBuildParamsBuilder
         {
             params: HashMap::new()
         }
@@ -372,20 +401,12 @@ impl DockerBuildBuilder<'_> {
         self
     }
 
-    pub fn build(&self) -> DockerBuildBuilder
+    pub fn build(&self) -> DockerBuildParams
     {
-        DockerBuildBuilder
+        DockerBuildParams
         {
             params: self.params.clone()
         }
-    }
-
-    pub fn url_encoded(&self) -> Result<String, Box<dyn Error>>
-    {
-        let json = serde_json::to_string(&self.params)?;
-        let url_encoded = urlencoding::encode(json.as_str());
-
-        Ok(url_encoded.to_string())
     }
 }
 
@@ -571,14 +592,14 @@ impl Images<'_>
         Ok(log)
     }
 
-    pub async fn build_image<'b>(&self, folder_path: &str, build_params: Option<DockerBuildBuilder<'b>>)
+    pub async fn build_image(&self, folder_path: &str, build_params: Option<DockerBuildParams>)
         -> Result<String, Box<dyn Error>>
     {
-        let mut endpoint = String::from("/build?t=thisisatest");
+        let mut endpoint = String::from("/build");
 
         if let Some(build_params) = build_params
         {
-            endpoint.push_str(format!("?{:?}", build_params.url_encoded()).as_str());
+            endpoint.push_str(format!("?{}", build_params.url_encoded()?).as_str());
         }
 
         let mut bytes = Vec::default();

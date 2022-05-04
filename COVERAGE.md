@@ -29,7 +29,7 @@
 
 - [ ] Images
     - [x] List Images
-    - [ ] Build an image
+    - [x] Build an image (does not follow .dockerignore rules)
     - [ ] Delete builder cache
     - [ ] Create an image
     - [x] Inspect an image
