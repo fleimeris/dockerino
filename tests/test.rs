@@ -7,7 +7,7 @@ mod tests {
     use std::ops::Deref;
     use serde::de::Unexpected::Str;
     use dockerino::docker::Docker;
-    use dockerino::images::{DockerBuildParamsBuilder, ListImagesFilter};
+    use dockerino::images::{DockerBuildParamsBuilder, ListImagesFilter, SearchImagesFilterBuilder};
 
     #[tokio::test]
     async fn get_all_images() {
@@ -184,5 +184,26 @@ mod tests {
             Err(error) => panic!("{:?}", error),
             Ok(result) => println!("{:?}", result)
         };
+    }
+
+    #[tokio::test]
+    async fn search_images()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let params = SearchImagesFilterBuilder::new()
+            .is_official(true)
+            .is_automated(true)
+            .build();
+
+        let result = images.search_images("mysql", Some(5), Some(params)).await;
+
+        match result
+        {
+            Ok(images) => println!("Found these images: {:?}", images),
+            Err(error) => panic!("{:?}", error)
+        }
     }
 }

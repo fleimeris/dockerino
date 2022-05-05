@@ -11,6 +11,11 @@ use flate2::{Compression, write::GzEncoder};
 use tar::Builder;
 use crate::utils::ObjectConverter;
 
+pub struct Images<'a>
+{
+    docker: &'a Docker
+}
+
 impl Images<'_>
 {
     pub fn new(docker: &'_ Docker) -> Images
@@ -218,6 +223,32 @@ impl Images<'_>
 
         Ok(result)
     }
+
+    pub async fn search_images(&self, term: &str, limit: Option<i32>, filters: Option<SearchImagesFilter>)
+        -> Result<Vec<ImageSearchResult>, Box<dyn Error>>
+    {
+        let mut endpoint = format!("/images/search?term={}", term);
+
+        if let Some(limit) = limit
+        {
+            endpoint.push_str(format!("&limit{}", limit).as_str());
+        }
+
+        if let Some(filters) = filters
+        {
+            let filter_json = filters.url_encoded(&filters.params)?;
+            endpoint.push_str(format!("&filters={}", filter_json).as_str());
+        }
+
+        let response = self.docker
+            .request(Method::GET, endpoint.as_str(), None, None).await?;
+
+        let response_body = self.docker.parse_response_body(response).await?;
+
+        let result: Vec<ImageSearchResult> = serde_json::from_str(response_body.as_str())?;
+
+        Ok(result)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -345,6 +376,16 @@ pub struct ImageHistory
     tags: Option<Vec<String>>,
     size: i128,
     comment: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ImageSearchResult
+{
+    description: String,
+    is_official: bool,
+    is_automated: bool,
+    name: String,
+    star_count: i32
 }
 
 pub struct ListImagesFilter
@@ -593,7 +634,51 @@ impl DockerBuildParamsBuilder
     }
 }
 
-pub struct Images<'a>
+pub struct SearchImagesFilter
 {
-    docker: &'a Docker
+    params: HashMap<&'static str, Vec<String>>
+}
+
+impl ObjectConverter for SearchImagesFilter {}
+
+pub struct SearchImagesFilterBuilder
+{
+    params: HashMap<&'static str, Vec<String>>
+}
+
+impl SearchImagesFilterBuilder
+{
+    pub fn new() -> Self
+    {
+        SearchImagesFilterBuilder
+        {
+            params: HashMap::new()
+        }
+    }
+
+    pub fn is_automated(&mut self, automated_enabled: bool) -> &mut Self
+    {
+        self.params.insert("is-automated", vec![automated_enabled.to_string()]);
+        self
+    }
+
+    pub fn is_official(&mut self, official_enabled: bool) -> &mut Self
+    {
+        self.params.insert("is-official", vec![official_enabled.to_string()]);
+        self
+    }
+
+    pub fn minimum_stars(&mut self, min_stars: i32) -> &mut Self
+    {
+        self.params.insert("stars", vec![min_stars.to_string()]);
+        self
+    }
+
+    pub fn build(&self) -> SearchImagesFilter
+    {
+        SearchImagesFilter
+        {
+            params: self.params.clone()
+        }
+    }
 }
