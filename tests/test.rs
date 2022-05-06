@@ -7,7 +7,7 @@ mod tests {
     use std::ops::Deref;
     use serde::de::Unexpected::Str;
     use dockerino::docker::Docker;
-    use dockerino::images::{DockerBuildParamsBuilder, ListImagesFilter, SearchImagesFilterBuilder};
+    use dockerino::images::{DeleteBuilderCacheFilterBuilder, DockerBuildParamsBuilder, ListImagesFilter, SearchImagesFilterBuilder};
 
     #[tokio::test]
     async fn get_all_images() {
@@ -203,6 +203,29 @@ mod tests {
         match result
         {
             Ok(images) => println!("Found these images: {:?}", images),
+            Err(error) => panic!("{:?}", error)
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_builder_cache()
+    {
+        let docker = Docker::new(String::from("/var/run/docker.sock"));
+
+        let images = docker.images();
+
+        let mut filter = DeleteBuilderCacheFilterBuilder::new()
+            .in_use()
+            .shared()
+            .private()
+            .until("1000h")
+            .build();
+
+        let result = images.delete_builder_cache(Some(0), Some(true), Some(filter)).await;
+
+        match result
+        {
+            Ok(response) => println!("Cache delete response: {:?}", response),
             Err(error) => panic!("{:?}", error)
         }
     }

@@ -175,7 +175,7 @@ impl Images<'_>
             username: "".to_string(),
             password: "".to_string(),
             email: "".to_string(),
-            serveraddress: server_address.to_string()
+            server_address: server_address.to_string()
         };
 
         let auth_header_json = serde_json::to_string(&auth_header)?;
@@ -246,6 +246,59 @@ impl Images<'_>
         let response_body = self.docker.parse_response_body(response).await?;
 
         let result: Vec<ImageSearchResult> = serde_json::from_str(response_body.as_str())?;
+
+        Ok(result)
+    }
+
+    pub async fn delete_builder_cache(&self, keep_storage: Option<i64>, all: Option<bool>, filters: Option<DeleteBuilderCacheFilter>)
+        -> Result<DeleteBuilderCacheResult, Box<dyn Error>>
+    {
+        let mut endpoint = String::from("/build/prune?");
+
+        let mut written = false;
+
+        if let Some(keep_storage) = keep_storage
+        {
+            if written
+            {
+               endpoint.push_str("&");
+            }
+
+            endpoint.push_str(format!("keep-storage={}", keep_storage.to_string()).as_str());
+
+            written = true;
+        }
+
+        if let Some(all) = all
+        {
+            if written
+            {
+                endpoint.push_str("&");
+            }
+
+            endpoint.push_str(format!("all={}", all.to_string()).as_str());
+
+            written = true;
+        }
+
+        if let Some(filters) = filters
+        {
+            if written
+            {
+                endpoint.push_str("&");
+            }
+
+            endpoint.push_str(format!("filters={}", filters.url_encoded(&filters.params)?).as_str());
+
+            written = true;
+        }
+
+        let response = self.docker
+            .request(Method::POST, endpoint.as_str(), None, None).await?;
+
+        let response_body = self.docker.parse_response_body(response).await?;
+
+        let result: DeleteBuilderCacheResult = serde_json::from_str(response_body.as_str())?;
 
         Ok(result)
     }
@@ -386,6 +439,16 @@ pub struct ImageSearchResult
     is_automated: bool,
     name: String,
     star_count: i32
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeleteBuilderCacheResult
+{
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    caches_deleted: Option<Vec<String>>,
+    space_reclaimed: i64
 }
 
 pub struct ListImagesFilter
@@ -705,6 +768,95 @@ impl SearchImagesFilterBuilder
     pub fn build(&self) -> SearchImagesFilter
     {
         SearchImagesFilter
+        {
+            params: self.params.clone()
+        }
+    }
+}
+
+pub struct DeleteBuilderCacheFilter
+{
+    params: HashMap<&'static str, Vec<String>>
+}
+
+impl ObjectConverter for DeleteBuilderCacheFilter {}
+
+pub struct DeleteBuilderCacheFilterBuilder
+{
+    params: HashMap<&'static str, Vec<String>>
+}
+
+impl DeleteBuilderCacheFilterBuilder
+{
+    pub fn new() -> Self
+    {
+        DeleteBuilderCacheFilterBuilder
+        {
+            params: HashMap::new()
+        }
+    }
+
+    pub fn until<T>(&mut self, duration: T) -> &mut Self
+        where
+            T: Into<String>
+    {
+        self.params.insert("until", vec![duration.into()]);
+        self
+    }
+
+    pub fn id<T>(&mut self, image_id: T) -> &mut Self
+        where
+            T: Into<String>
+    {
+        self.params.insert("id", vec![image_id.into()]);
+        self
+    }
+
+    pub fn parent<T>(&mut self, image_id: T) -> &mut Self
+        where
+            T: Into<String>
+    {
+        self.params.insert("parent", vec![image_id.into()]);
+        self
+    }
+
+    pub fn set_type<T>(&mut self, set_type: T) -> &mut Self
+        where
+            T: Into<String>
+    {
+        self.params.insert("type", vec![set_type.into()]);
+        self
+    }
+
+    pub fn description<T>(&mut self, description: T) -> &mut Self
+        where
+            T: Into<String>
+    {
+        self.params.insert("description", vec![description.into()]);
+        self
+    }
+
+    pub fn in_use(&mut self) -> &mut Self
+    {
+        self.params.insert("inuse", vec![]);
+        self
+    }
+
+    pub fn shared(&mut self) -> &mut Self
+    {
+        self.params.insert("shared", vec![]);
+        self
+    }
+
+    pub fn private(&mut self) -> &mut Self
+    {
+        self.params.insert("private", vec![]);
+        self
+    }
+
+    pub fn build(&self) -> DeleteBuilderCacheFilter
+    {
+        DeleteBuilderCacheFilter
         {
             params: self.params.clone()
         }

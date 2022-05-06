@@ -30,14 +30,14 @@
 - [ ] Images
     - [x] List Images
     - [x] Build an image (does not follow .dockerignore rules)
-    - [ ] Delete builder cache
+    - [x] Delete builder cache
     - [ ] Create an image
     - [x] Inspect an image
     - [x] Get the history of an image
     - [x] Push an image
     - [x] Tag an image
     - [x] Remove an image
-    - [ ] Search images
+    - [x] Search images
     - [ ] Delete unused images
     - [ ] Create a new image from a container
     - [x] Export an image

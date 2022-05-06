@@ -16,7 +16,8 @@ pub struct AuthHeader
     pub username: String,
     pub password: String,
     pub email: String,
-    pub serveraddress: String
+    #[serde(rename = "serveraddress")]
+    pub server_address: String
 }
 
 pub struct Docker
@@ -94,7 +95,7 @@ impl Docker
 
                 //TODO: custom error with response code
 
-                return Err(format!("Response was {:?}. Message:\n{:?}", status_code, docker_error.message))?
+                return Err(format!("Response was {}. Message:\n{}", status_code, docker_error.message).into())
             },
             _ => ()
         }
