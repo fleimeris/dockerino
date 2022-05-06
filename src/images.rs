@@ -403,9 +403,11 @@ impl ListImagesFilter {
         }
     }
 
-    pub fn before(&mut self, before: String) -> &mut Self
+    pub fn before<T>(&mut self, before: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("before", vec![before]);
+        self.params.insert("before", vec![before.into()]);
         self
     }
 
@@ -415,21 +417,27 @@ impl ListImagesFilter {
         self
     }
 
-    pub fn label(&mut self, label: String) -> &mut Self
+    pub fn label<T>(&mut self, label: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("label", vec![label]);
+        self.params.insert("label", vec![label.into()]);
         self
     }
 
-    pub fn reference(&mut self, reference: String) -> &mut Self
+    pub fn reference<T>(&mut self, reference: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("reference", vec![reference]);
+        self.params.insert("reference", vec![reference.into()]);
         self
     }
 
-    pub fn since(&mut self, since: String) -> &mut Self
+    pub fn since<T>(&mut self, since: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("since", vec![since]);
+        self.params.insert("since", vec![since.into()]);
         self
     }
 
@@ -470,27 +478,35 @@ impl DockerBuildParamsBuilder
         }
     }
 
-    pub fn dockerfile(&mut self, dockerfile: String) -> &mut Self
+    pub fn dockerfile<T>(&mut self, dockerfile: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("dockerfile", dockerfile);
+        self.params.insert("dockerfile", dockerfile.into());
         self
     }
 
-    pub fn tag(&mut self, tag: String) -> &mut Self
+    pub fn tag<T>(&mut self, tag: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("t", tag);
+        self.params.insert("t", tag.into());
         self
     }
 
-    pub fn extrahosts(&mut self, extra_hosts: String) -> &mut Self
+    pub fn extrahosts<T>(&mut self, extra_hosts: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("extrahosts", extra_hosts);
+        self.params.insert("extrahosts", extra_hosts.into());
         self
     }
 
-    pub fn remote(&mut self, remote: String) -> &mut Self
+    pub fn remote<T>(&mut self, remote: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("remote", remote);
+        self.params.insert("remote", remote.into());
         self
     }
 
@@ -506,9 +522,11 @@ impl DockerBuildParamsBuilder
         self
     }
 
-    pub fn cache_from(&mut self, image: String) -> &mut Self
+    pub fn cache_from<T>(&mut self, image: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("cachefrom", image);
+        self.params.insert("cachefrom", image.into());
         self
     }
 
@@ -555,9 +573,11 @@ impl DockerBuildParamsBuilder
         self
     }
 
-    pub fn set_cpus(&mut self, cpus: String) -> &mut Self
+    pub fn set_cpus<T>(&mut self, cpus: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("cpusetcpus", cpus);
+        self.params.insert("cpusetcpus", cpus.into());
         self
     }
 
@@ -601,27 +621,35 @@ impl DockerBuildParamsBuilder
         self
     }
 
-    pub fn network_mode(&mut self, mode: String) -> &mut Self
+    pub fn network_mode<T>(&mut self, mode: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("networkmode", mode);
+        self.params.insert("networkmode", mode.into());
         self
     }
 
-    pub fn platform(&mut self, platform: String) -> &mut Self
+    pub fn platform<T>(&mut self, platform: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("platform", platform);
+        self.params.insert("platform", platform.into());
         self
     }
 
-    pub fn target(&mut self, target: String) -> &mut Self
+    pub fn target<T>(&mut self, target: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("target", target);
+        self.params.insert("target", target.into());
         self
     }
 
-    pub fn outputs(&mut self, outputs: String) -> &mut Self
+    pub fn outputs<T>(&mut self, outputs: T) -> &mut Self
+        where
+            T: Into<String>
     {
-        self.params.insert("outputs", outputs);
+        self.params.insert("outputs", outputs.into());
         self
     }
 

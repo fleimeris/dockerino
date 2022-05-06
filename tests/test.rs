@@ -175,7 +175,7 @@ mod tests {
 
         let images = docker.images();
 
-        let params = DockerBuildParamsBuilder::new().tag("t".to_string()).build();
+        let params = DockerBuildParamsBuilder::new().tag("t").build();
 
         let result = images.build_image("/home/benas/test", Some(params)).await;
 
