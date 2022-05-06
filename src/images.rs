@@ -28,7 +28,7 @@ impl Images<'_>
 
     pub async fn get_images_all(&self, filter: Option<ListImagesFilter>) -> Result<Vec<Image>, Box<dyn Error>>
     {
-        let mut endpoint = format!("/images/json");
+        let mut endpoint = String::from("/images/json");
 
         if let Some(filter) = filter
         {
